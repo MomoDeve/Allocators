@@ -11,4 +11,4 @@ class FreeListAllocator
     size_t Deallocate(size_t offset);
 };
 ```
-`FreeListAllocator` does not manage memory explicitly. Instead it operates on abstract continuous memory chunk using `size` and `offset`. This allows using allocator not only for heap allocations, but also for managing GPU memory (for example vertex buffer in popular graphic APIs)
+`FreeListAllocator` does not manage memory explicitly. Instead it operates on abstract continuous memory chunk using `size` and `offset`. This allows using allocator not only for heap allocations, but also for managing GPU memory, for example allocating multiple meshes in a single vertex buffer in popular graphic APIs
