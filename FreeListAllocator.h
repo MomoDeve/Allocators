@@ -13,20 +13,20 @@ class FreeListAllocator
     };
 
     std::function<void(size_t)> onResize;
-    size_t currentByteSize = 0;
+    size_t currentSize = 0;
     std::vector<MeshEntry> meshEntries;
 
-    [[nodiscard]] size_t AllocateInMeshEntry(typename std::vector<MeshEntry>::iterator meshEntry, size_t byteSize)
+    [[nodiscard]] size_t AllocateInMeshEntry(typename std::vector<MeshEntry>::iterator meshEntry, size_t size)
     {
-        size_t offset = meshEntry->Offset;
-        size_t size = meshEntry->Size;
-        if (byteSize < meshEntry->Size)
+        size_t entryOffset = meshEntry->Offset;
+        size_t entrySize = meshEntry->Size;
+        if (size < meshEntry->Size)
         {
-            meshEntry->Size = byteSize;
+            meshEntry->Size = size;
             meshEntry->IsFree = false;
-            this->meshEntries.insert(meshEntry + 1, MeshEntry{ offset + byteSize, size - byteSize, true });
+            this->meshEntries.insert(meshEntry + 1, MeshEntry{ entryOffset + size, entrySize - size, true });
         }
-        return offset;
+        return entryOffset;
     }
 
     void Merge(typename std::vector<MeshEntry>::iterator meshEntry)
@@ -49,33 +49,33 @@ class FreeListAllocator
         this->meshEntries.erase(it, meshEntry);
     }
 public:
-    void Init(size_t initialByteSize, std::function<void(size_t)> onResize)
+    void Init(size_t initialSize, std::function<void(size_t)> onResize)
     {
-        this->currentByteSize = initialByteSize;
-        this->meshEntries.push_back(MeshEntry{ 0, initialByteSize, true });
+        this->currentSize = initialSize;
+        this->meshEntries.push_back(MeshEntry{ 0, initialSize, true });
         this->onResize = std::move(onResize);
-        this->onResize(initialByteSize);
+        this->onResize(initialSize);
     }
 
-    void Resize(size_t newByteSize)
+    void Resize(size_t newSize)
     {
-        this->meshEntries.push_back(MeshEntry{ this->currentByteSize, newByteSize - this->currentByteSize, true });
-        this->currentByteSize = newByteSize;
+        this->meshEntries.push_back(MeshEntry{ this->currentSize, newSize - this->currentSize, true });
+        this->currentSize = newSize;
         this->Merge(this->meshEntries.end() - 1);
-        this->onResize(newByteSize);
+        this->onResize(newSize);
     }
 
-    [[nodiscard]] size_t Allocate(size_t byteSize)
+    [[nodiscard]] size_t Allocate(size_t size)
     {
         for (auto meshEntry = this->meshEntries.begin(); meshEntry != this->meshEntries.end(); meshEntry++)
         {
-            if (meshEntry->IsFree && byteSize <= meshEntry->Size)
+            if (meshEntry->IsFree && size <= meshEntry->Size)
             {
-                return this->AllocateInMeshEntry(meshEntry, byteSize);
+                return this->AllocateInMeshEntry(meshEntry, size);
             }
         }
-        this->Resize(2 * (this->currentByteSize + byteSize));
-        return this->AllocateInMeshEntry(this->meshEntries.end() - 1, byteSize);
+        this->Resize(2 * (this->currentSize + size));
+        return this->AllocateInMeshEntry(this->meshEntries.end() - 1, size);
     }
     
     void Deallocate(size_t offset)
