@@ -7,7 +7,7 @@ namespace Allocators
 {
     class FreeListAllocator
     {
-        struct MeshEntry
+        struct Block
         {
             size_t Offset;
             size_t Size;
@@ -16,60 +16,60 @@ namespace Allocators
 
         std::function<void(size_t)> onResize;
         size_t currentSize = 0;
-        std::vector<MeshEntry> meshEntries;
+        std::vector<Block> blocks;
 
-        [[nodiscard]] size_t AllocateInMeshEntry(typename std::vector<MeshEntry>::iterator meshEntry, size_t size)
+        [[nodiscard]] size_t AllocateInMeshEntry(typename std::vector<Block>::iterator meshEntry, size_t size)
         {
             size_t entryOffset = meshEntry->Offset;
             size_t entrySize = meshEntry->Size;
+            meshEntry->IsFree = false;
             if (size < meshEntry->Size)
             {
                 meshEntry->Size = size;
-                meshEntry->IsFree = false;
-                this->meshEntries.insert(meshEntry + 1, MeshEntry{ entryOffset + size, entrySize - size, true });
+                this->blocks.insert(meshEntry + 1, Block{ entryOffset + size, entrySize - size, true });
             }
             return entryOffset;
         }
 
-        void Merge(typename std::vector<MeshEntry>::iterator meshEntry)
+        void Merge(typename std::vector<Block>::iterator meshEntry)
         {
-            typename std::vector<MeshEntry>::iterator it;
-            for (it = meshEntry + 1; it != this->meshEntries.end() && it->IsFree; it++)
+            typename std::vector<Block>::iterator it;
+            for (it = meshEntry + 1; it != this->blocks.end() && it->IsFree; it++)
             {
                 meshEntry->Size += it->Size;
             }
-            this->meshEntries.erase(meshEntry + 1, it);
+            this->blocks.erase(meshEntry + 1, it);
 
-            if (meshEntry == this->meshEntries.begin()) return;
-            for (it = meshEntry; it != this->meshEntries.begin(); it--)
+            if (meshEntry == this->blocks.begin()) return;
+            for (it = meshEntry; it != this->blocks.begin(); it--)
             {
                 auto& prevEntry = *(it - 1);
                 if (!prevEntry.IsFree) break;
                 meshEntry->Size += prevEntry.Size;
                 meshEntry->Offset = prevEntry.Offset;
             }
-            this->meshEntries.erase(it, meshEntry);
+            this->blocks.erase(it, meshEntry);
         }
     public:
         void Init(size_t initialSize, std::function<void(size_t)> onResize)
         {
             this->currentSize = initialSize;
-            this->meshEntries.push_back(MeshEntry{ 0, initialSize, true });
+            this->blocks.push_back(Block{ 0, initialSize, true });
             this->onResize = std::move(onResize);
             this->onResize(initialSize);
         }
 
         void Resize(size_t newSize)
         {
-            this->meshEntries.push_back(MeshEntry{ this->currentSize, newSize - this->currentSize, true });
+            this->blocks.push_back(Block{ this->currentSize, newSize - this->currentSize, true });
             this->currentSize = newSize;
-            this->Merge(this->meshEntries.end() - 1);
+            this->Merge(this->blocks.end() - 1);
             this->onResize(newSize);
         }
 
         [[nodiscard]] size_t Allocate(size_t size)
         {
-            for (auto meshEntry = this->meshEntries.begin(); meshEntry != this->meshEntries.end(); meshEntry++)
+            for (auto meshEntry = this->blocks.begin(); meshEntry != this->blocks.end(); meshEntry++)
             {
                 if (meshEntry->IsFree && size <= meshEntry->Size)
                 {
@@ -77,12 +77,12 @@ namespace Allocators
                 }
             }
             this->Resize(2 * (this->currentSize + size));
-            return this->AllocateInMeshEntry(this->meshEntries.end() - 1, size);
+            return this->AllocateInMeshEntry(this->blocks.end() - 1, size);
         }
 
         void Deallocate(size_t offset)
         {
-            for (auto meshEntry = this->meshEntries.begin(); meshEntry != this->meshEntries.end(); meshEntry++)
+            for (auto meshEntry = this->blocks.begin(); meshEntry != this->blocks.end(); meshEntry++)
             {
                 if (meshEntry->Offset == offset)
                 {
